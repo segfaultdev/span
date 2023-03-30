@@ -2,29 +2,44 @@
 #define __SPAN_H__
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct sp_node_t sp_node_t;
 typedef struct span_t span_t;
 
 struct sp_node_t {
-  size_t size, max_free;
+  union {
+    struct {
+      size_t free, span, left, right;
+      size_t lazy_start, lazy_end;
+    };
+    
+    size_t data[6];
+  };
+  
+  int is_dirty;
+  size_t width;
 };
 
 struct span_t {
-  sp_node_t nodes[];
+  size_t size;
+  
+  size_t size_64, size_32, size_16, size_8;
+  size_t end_64, end_32, end_16, end_8;
+  
+  sp_node_t last_node;
+  size_t last_index;
+  
+  uint8_t data[];
 };
 
-ssize_t sp_find(span_t *span, size_t index, size_t size);
+void   sp_init(span_t *span, size_t size);
+size_t sp_get_width(span_t *span, size_t index);
 
-size_t sp_index_by_offset(span_t *span, size_t index, size_t offset);
-size_t sp_offset_by_index(span_t *span, size_t index);
+sp_node_t sp_read(span_t *span, size_t index);
+void      sp_write(span_t *span, size_t index, sp_node_t node);
 
-ssize_t sp_previous(span_t *span, size_t index);
-ssize_t sp_next(span_t *span, size_t index);
-
-void sp_merge()
-
-void sp_mark_used(span_t *span, size_t index, size_t size);
-void sp_mark_free(span_t *span, size_t index);
+void sp_clear(span_t *span, size_t index);
+void sp_fill(span_t *span, size_t index);
 
 #endif

@@ -1,104 +1,187 @@
 #include <stddef.h>
+#include <stdint.h>
 #include <span.h>
 
-ssize_t sp_find(span_t *span, size_t index, size_t size) {
-  if (span->nodes[index].max_free == span->nodes[index].size) {
-    return index;
-  } else if (span->nodes[index].max_free < size) {
-    return -1;
-  }
-  
-  if (span->nodes[2 * index + 1].max_free >= size) {
-    return sp_find(span, 2 * index + 1, size);
-  } else {
-    return sp_find(span, 2 * index + 2, size);
-  }
-}
+#define SP_MAX(x, y) ({size_t _x = (x), _y = (y); (_x > _y ? _x : _y);})
 
-size_t sp_index_by_offset(span_t *span, size_t index, size_t offset) {
-  if (!span->nodes[index].max_free || span->nodes[index].max_free == span->nodes[index].size) {
-    return 0;
-  }
+void sp_init(span_t *span, size_t size) {
+  int log_size = (sizeof(size_t) * 8) - __builtin_clzll(size - 1) - 1;
+  span->size = size;
   
-  if (offset >= span->nodes[2 * index + 1].size) {
-    return sp_index_by_offset(span, 2 * index + 2, offset - span->nodes[2 * index + 1].size);
-  } else {
-    return sp_index_by_offset(span, 2 * index + 1, offset);
-  }
-}
-
-size_t sp_offset_by_index(span_t *span, size_t index) {
+  span->size_64 = span->size_32 = span->size_16 = span->size_8 = 0;
+  span->end_64 = span->end_32 = span->end_16 = span->end_8 = 0;
   
-}
-
-ssize_t sp_previous(span_t *span, size_t index) {
-  size_t previous = index;
-  
-  while (previous) {
-    size_t parent = (previous - 1) / 2;
+  for (int i = 0; log_size >= 0 && i < 8; i++) {
+    span->size_8 += 6 * (1ull << log_size);
+    span->end_8 += (1ull << log_size);
     
-    if (previous == 2 * parent + 2) {
-      previous--;
-      break;
+    log_size--;
+  }
+  
+  for (int i = 0; log_size >= 0 && i < 8; i++) {
+    span->size_16 += 12 * (1ull << log_size);
+    span->end_16 += (1ull << log_size);
+    
+    log_size--;
+  }
+  
+  for (int i = 0; log_size >= 0 && i < 16; i++) {
+    span->size_32 += 24 * (1ull << log_size);
+    span->end_32 += (1ull << log_size);
+    
+    log_size--;
+  }
+  
+  for (int i = 0; log_size >= 0 && i < 32; i++) {
+    span->size_64 += 48 * (1ull << log_size);
+    span->end_64 += (1ull << log_size);
+    
+    log_size--;
+  }
+  
+  span->size_32 += span->size_64;
+  span->size_16 += span->size_32;
+  span->size_8 += span->size_16;
+  
+  span->end_32 += span->end_64;
+  span->end_16 += span->end_32;
+  span->end_8 += span->end_16;
+  
+  span->last_index = (size_t)(-1);
+}
+
+size_t sp_get_width(span_t *span, size_t index) {
+  return (2ull << (__builtin_clzll(index + 1) - __builtin_clzll(span->size - 1)));
+}
+
+sp_node_t sp_read(span_t *span, size_t index) {
+  if (index == span->last_index) {
+    return span->last_node;
+  }
+  
+  sp_node_t node;
+  node.width = sp_get_width(span, index);
+  
+  if (index < span->end_64) {
+    uint64_t *data = (uint64_t *)(span->data) + (index * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      node.data[i] = data[i];
+    }
+  } else if (index < span->end_32) {
+    uint32_t *data = (uint32_t *)(span->data + span->size_64) + ((index - span->end_64) * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      node.data[i] = data[i];
+    }
+  } else if (index < span->end_16) {
+    uint16_t *data = (uint16_t *)(span->data + span->size_32) + ((index - span->end_32) * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      node.data[i] = data[i];
+    }
+  } else {
+    uint8_t *data = (uint8_t *)(span->data + span->size_16) + ((index - span->end_16) * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      node.data[i] = data[i];
+    }
+  }
+  
+  if (node.left + node.right > node.width) {
+    node.free = node.span = node.left = node.right = node.width;
+  }
+  
+  if (node.lazy_end < node.lazy_start) {
+    node.is_dirty = 0;
+  } else {
+    node.is_dirty = 1;
+    node.lazy_end++;
+  }
+  
+  span->last_index = index;
+  return (span->last_node = node);
+}
+
+void sp_write(span_t *span, size_t index, sp_node_t node) {
+  span->last_index = index;
+  span->last_node = node;
+  
+  if (node.free == node.width) {
+    node.free = node.span = node.left = node.right = node.width - 1;
+  }
+  
+  if (node.is_dirty) {
+    node.lazy_end--;
+  } else {
+    node.lazy_start = node.width - 1;
+    node.lazy_end = 0;
+  }
+  
+  printf("%d: [", index);
+    
+    for (int j = 0; j < 6; j++) {
+      if (j) {
+        putchar(' ');
+      }
+      
+      printf("%llu", node.data[j]);
     }
     
-    previous = parent;
-  }
+    printf("]\n");
   
-  while (!span->nodes[previous].max_free || span->nodes[previous].max_free == span->nodes[previous].size) {
-    previous = 2 * previous + 2;
-  }
-  
-  if (previous == index) {
-    return -1;
-  }
-  
-  return previous;
-}
-
-ssize_t sp_next(span_t *span, size_t index) {
-  size_t next = index;
-  
-  while (next) {
-    size_t parent = (next - 1) / 2;
+  if (index < span->end_64) {
+    uint64_t *data = (uint64_t *)(span->data) + (index * 6);
     
-    if (next == 2 * parent + 1) {
-      next++;
-      break;
+    for (int i = 0; i < 6; i++) {
+      data[i] = node.data[i];
     }
+  } else if (index < span->end_32) {
+    uint32_t *data = (uint32_t *)(span->data + span->size_64) + ((index - span->end_64) * 6);
     
-    next = parent;
+    for (int i = 0; i < 6; i++) {
+      data[i] = node.data[i];
+    }
+  } else if (index < span->end_16) {
+    uint16_t *data = (uint16_t *)(span->data + span->size_32) + ((index - span->end_32) * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      data[i] = node.data[i];
+    }
+  } else {
+    uint8_t *data = (uint8_t *)(span->data + span->size_16) + ((index - span->end_16) * 6);
+    
+    for (int i = 0; i < 6; i++) {
+      data[i] = node.data[i];
+    }
   }
-  
-  while (!span->nodes[next].max_free || span->nodes[next].max_free == span->nodes[next].size) {
-    next = 2 * next + 1;
-  }
-  
-  if (next == index) {
-    return -1;
-  }
-  
-  return next;
 }
 
-void sp_mark_used(span_t *span, size_t index, size_t size) {
-  if (span->nodes[index].size == size) {
-    span->nodes[index].max_size = 0;
+void sp_clear(span_t *span, size_t index) {
+  if (2 * index + 2 >= span->end_8) {
+    sp_write(span, index, (sp_node_t) {
+      .free = 2,
+      
+      .is_dirty = 0,
+      .width = 2,
+    });
+    
     return;
   }
   
-  span->nodes[index].max_size = span->nodes[index].size - size;
+  sp_clear(span, 2 * index + 1);
+  sp_node_t left = sp_read(span, 2 * index + 1);
   
-  span->nodes[2 * index + 1].max_size = 0, span->nodes[2 * index + 1].size = size;
-  span->nodes[2 * index + 2].max_size = span->nodes[2 * index + 2].size = span->nodes[index].max_size;
+  sp_clear(span, 2 * index + 2);
+  sp_node_t right = sp_read(span, 2 * index + 2);
   
-  ssize_t next = sp_next(span, index);
-  
-  if (next >= 0 && span->nodes[next].max_size) {
-    sp_merge(span, index, next);
-  }
-}
-
-void sp_mark_free(span_t *span, size_t index) {
-  
+  sp_write(span, index, (sp_node_t) {
+    .free = left.free + right.free,
+    .span = SP_MAX(SP_MAX(left.span, right.span), left.right + right.left),
+    .left = ((left.free == left.width) ? left.free + right.left : left.left),
+    .right = ((right.free == right.width) ? right.free + left.right : right.right),
+    
+    .is_dirty = 0,
+    .width = left.width + right.width,
+  });
 }
