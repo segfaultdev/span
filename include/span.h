@@ -40,6 +40,6 @@ sp_node_t sp_read(span_t *span, size_t index);
 void      sp_write(span_t *span, size_t index, sp_node_t node);
 
 void sp_clear(span_t *span, size_t index);
-void sp_fill(span_t *span, size_t index);
+void sp_apply(span_t *span, size_t index);
 
 #endif

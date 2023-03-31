@@ -88,7 +88,7 @@ sp_node_t sp_read(span_t *span, size_t index) {
     }
   }
   
-  if (node.left + node.right > node.width) {
+  if (node.left + node.right >= node.width) {
     node.free = node.span = node.left = node.right = node.width;
   }
   
@@ -117,18 +117,6 @@ void sp_write(span_t *span, size_t index, sp_node_t node) {
     node.lazy_start = node.width - 1;
     node.lazy_end = 0;
   }
-  
-  printf("%d: [", index);
-    
-    for (int j = 0; j < 6; j++) {
-      if (j) {
-        putchar(' ');
-      }
-      
-      printf("%llu", node.data[j]);
-    }
-    
-    printf("]\n");
   
   if (index < span->end_64) {
     uint64_t *data = (uint64_t *)(span->data) + (index * 6);
@@ -184,4 +172,8 @@ void sp_clear(span_t *span, size_t index) {
     .is_dirty = 0,
     .width = left.width + right.width,
   });
+}
+
+void sp_apply(span_t *span, size_t index) {
+  // Apply lazy propagation on each index, non-recursively (TODO)
 }
