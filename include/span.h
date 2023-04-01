@@ -27,9 +27,6 @@ struct span_t {
   size_t size_64, size_32, size_16, size_8;
   size_t end_64, end_32, end_16, end_8;
   
-  sp_node_t last_node;
-  size_t last_index;
-  
   uint8_t data[];
 };
 
@@ -39,7 +36,9 @@ size_t sp_get_width(span_t *span, size_t index);
 sp_node_t sp_read(span_t *span, size_t index);
 void      sp_write(span_t *span, size_t index, sp_node_t node);
 
+int  sp_check(span_t *span, size_t index, size_t offset);
 void sp_clear(span_t *span, size_t index);
 void sp_apply(span_t *span, size_t index);
+void sp_mark(span_t *span, size_t start, size_t end);
 
 #endif

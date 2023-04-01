@@ -20,20 +20,12 @@ int main(void) {
   
   sp_clear(span, 0);
   
-  for (int i = 0; i < 255; i++) {
-    sp_node_t node = sp_read(span, i);
-    printf("%d: (", i);
-    
-    for (int j = 0; j < 6; j++) {
-      if (j) {
-        putchar(' ');
-      }
-      
-      printf("%llu", node.data[j]);
-    }
-    
-    printf(")\n");
-  }
+  printf("Biggest span is of size %llu.\n", sp_read(span, 0).span);
+  
+  sp_mark(span, 0, 132);
+  sp_apply(span, 0);
+  
+  printf("Biggest span is of size %llu.\n", sp_read(span, 0).span);
   
   return 0;
 }

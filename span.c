@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <span.h>
 
+#define SP_MIN(x, y) ({size_t _x = (x), _y = (y); (_x < _y ? _x : _y);})
 #define SP_MAX(x, y) ({size_t _x = (x), _y = (y); (_x > _y ? _x : _y);})
 
 void sp_init(span_t *span, size_t size) {
@@ -46,8 +47,6 @@ void sp_init(span_t *span, size_t size) {
   span->end_32 += span->end_64;
   span->end_16 += span->end_32;
   span->end_8 += span->end_16;
-  
-  span->last_index = (size_t)(-1);
 }
 
 size_t sp_get_width(span_t *span, size_t index) {
@@ -55,10 +54,6 @@ size_t sp_get_width(span_t *span, size_t index) {
 }
 
 sp_node_t sp_read(span_t *span, size_t index) {
-  if (index == span->last_index) {
-    return span->last_node;
-  }
-  
   sp_node_t node;
   node.width = sp_get_width(span, index);
   
@@ -99,14 +94,10 @@ sp_node_t sp_read(span_t *span, size_t index) {
     node.lazy_end++;
   }
   
-  span->last_index = index;
-  return (span->last_node = node);
+  return node;
 }
 
 void sp_write(span_t *span, size_t index, sp_node_t node) {
-  span->last_index = index;
-  span->last_node = node;
-  
   if (node.free == node.width) {
     node.free = node.span = node.left = node.right = node.width - 1;
   }
@@ -145,6 +136,22 @@ void sp_write(span_t *span, size_t index, sp_node_t node) {
   }
 }
 
+int sp_check(span_t *span, size_t index, size_t offset) {
+  sp_node_t node = sp_read(span, index);
+  
+  if (offset < node.left + 1) {
+    return (offset < node.left);
+  } else if (offset >= node.width - node.right - 1) {
+    return (offset >= node.width - node.right);
+  }
+  
+  if (offset < node.width / 2) {
+    return sp_check(span, 2 * index + 1, offset);
+  } else {
+    return sp_check(span, 2 * index + 2, offset - node.width / 2);
+  }
+}
+
 void sp_clear(span_t *span, size_t index) {
   if (2 * index + 2 >= span->end_8) {
     sp_write(span, index, (sp_node_t) {
@@ -163,11 +170,14 @@ void sp_clear(span_t *span, size_t index) {
   sp_clear(span, 2 * index + 2);
   sp_node_t right = sp_read(span, 2 * index + 2);
   
+  size_t node_left = ((left.free == left.width) ? left.free + right.left : left.left);
+  size_t node_right = ((right.free == right.width) ? right.free + left.right : right.right);
+  
   sp_write(span, index, (sp_node_t) {
     .free = left.free + right.free,
-    .span = SP_MAX(SP_MAX(left.span, right.span), left.right + right.left),
-    .left = ((left.free == left.width) ? left.free + right.left : left.left),
-    .right = ((right.free == right.width) ? right.free + left.right : right.right),
+    .span = SP_MAX(SP_MAX(SP_MAX(left.span, right.span), left.right + right.left), SP_MAX(node_left, node_right)),
+    .left = node_left,
+    .right = node_right,
     
     .is_dirty = 0,
     .width = left.width + right.width,
@@ -175,5 +185,99 @@ void sp_clear(span_t *span, size_t index) {
 }
 
 void sp_apply(span_t *span, size_t index) {
-  // Apply lazy propagation on each index, non-recursively (TODO)
+  sp_node_t node = sp_read(span, index);
+  if (!node.is_dirty) return;
+  
+  sp_node_t left = sp_read(span, 2 * index + 1);
+  sp_node_t right = sp_read(span, 2 * index + 2);
+  
+  if (node.lazy_start < node.width / 2) {
+    if (left.is_dirty) {
+      sp_apply(span, 2 * index + 1);
+      left = sp_read(span, 2 * index + 1);
+    }
+    
+    left.lazy_start = node.lazy_start;
+    left.lazy_end = SP_MIN(node.lazy_end, left.width);
+    
+    sp_write(span, 2 * index + 1, left);
+  }
+  
+  if (node.lazy_end >= node.width / 2) {
+    if (right.is_dirty) {
+      sp_apply(span, 2 * index + 2);
+      right = sp_read(span, 2 * index + 2);
+    }
+    
+    right.lazy_start = SP_MAX(node.lazy_start, right.width) - right.width;
+    right.lazy_end = node.lazy_end;
+    
+    sp_write(span, 2 * index + 2, right);
+  }
+  
+  int clear = 1;
+  
+  if (node.lazy_start < node.left) {
+    clear = 0;
+    
+    // Must end inside left edge, as lazy spans are guaranteed to have the same state in all bits prior to updating
+    
+    node.free -= (node.lazy_end - node.lazy_start);
+    node.left = node.lazy_start;
+    
+    if (node.right == node.width) {
+      node.right -= node.lazy_end;
+      node.span = SP_MAX(node.left, node.right);
+    }
+    
+    if (left.span == left.left && left.free < left.width) {
+      sp_apply(span, 2 * index + 1);
+      left = sp_read(span, 2 * index + 1);
+    } else {
+      left.free -= SP_MIN((node.lazy_end - node.lazy_start), left.width);
+      left.left = SP_MIN(node.lazy_start, left.width);
+      
+      if (left.right == left.width) {
+        left.right -= SP_MIN(left.lazy_end, left.width);
+        left.span = SP_MAX(left.left, left.right);
+      }
+    }
+    
+    if (right.span == right.left && right.free < right.width) {
+      sp_apply(span, 2 * index + 2);
+      right = sp_read(span, 2 * index + 2);
+    } else {
+      if (node.lazy_end > left.width) {
+        right.free -= (node.lazy_end - left.width);
+        right.left = 0;
+        
+        if (right.right == right.width) {
+          right.right -= (node.lazy_end - left.width);
+          right.span = SP_MAX(right.left, right.right);
+        }
+      }
+    }
+  }
+  
+  // Fill:
+  // - Left
+  // - Center
+  // - Right
+  // - Other (have to apply no matter what)
+  
+  // node.span = SP_MAX(SP_MAX(SP_MAX(left.span, right.span), left.right + right.left), SP_MAX(node.left, node.right));
+  node.is_dirty = 0;
+  
+  sp_write(span, index, node);
+}
+
+void sp_mark(span_t *span, size_t start, size_t end) {
+  sp_apply(span, 0);
+  sp_node_t node = sp_read(span, 0);
+  
+  node.lazy_start = start;
+  node.lazy_end = end;
+  
+  node.is_dirty = 1;
+  sp_write(span, 0, node);
 }
