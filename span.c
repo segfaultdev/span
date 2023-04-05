@@ -260,7 +260,7 @@ void sp_apply(span_t *span, size_t index) {
   }
   
   // Fill:
-  // - Left
+  // - Left (DONE)
   // - Center
   // - Right
   // - Other (have to apply no matter what)
