@@ -1,0 +1,11 @@
+/demo
+
+/icon/icon.h
+/icon/ignore
+/icon/icon_*.c
+/icon/png_to_icon
+
+/font/font.h
+/font/ignore
+/font/font_*.c
+/font/png_to_font
