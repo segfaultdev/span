@@ -4,9 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SPAN_COLOR(r, g, b)      ((uint16_t)(r << 8) | ((uint16_t)(g) << 4) | ((uint16_t)(b) << 0))
-#define SPAN_COLOR_HIGH(r, g, b) SPAN_COLOR((uint16_t)(r + 1) >> 1, (uint16_t)(g + 1) >> 1, (uint16_t)(b + 1) >> 1)
-#define SPAN_COLOR_TRUE(r, g, b) SPAN_COLOR((uint16_t)(r + 8) >> 4, (uint16_t)(g + 8) >> 4, (uint16_t)(b + 8) >> 4)
+#define SPAN_COLOR_RGBA(r, g, b, a) ((uint16_t)(a << 12) | (uint16_t)(r << 8) | ((uint16_t)(g) << 4) | ((uint16_t)(b) << 0))
+#define SPAN_COLOR(r, g, b)         SPAN_COLOR_RGBA(r, g, b, 0x0F)
+#define SPAN_COLOR_HIGH(r, g, b)    SPAN_COLOR((uint16_t)(r + 1) >> 1, (uint16_t)(g + 1) >> 1, (uint16_t)(b + 1) >> 1)
+#define SPAN_COLOR_TRUE(r, g, b)    SPAN_COLOR((uint16_t)(r + 8) >> 4, (uint16_t)(g + 8) >> 4, (uint16_t)(b + 8) >> 4)
 
 #define SPAN_LERP_N 1024
 
