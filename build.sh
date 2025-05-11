@@ -8,4 +8,4 @@ cd icon
 	bash build.sh
 cd ..
 
-gcc demo.c span/span.c font/font_*.c icon/icon_*.c -I include -o demo -lSDL2 -Os -s
+gcc demo.c span/span.c font/font_*.c icon/icon_*.c -I include -o demo -lSDL2 -Os -s -Wall -Wextra

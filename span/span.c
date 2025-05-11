@@ -69,6 +69,8 @@ int span_size_unit(const span_unit_t *unit) {
 	if (unit->type == SPAN_UNIT_ICON) {
 		return unit->icon->h;
 	}
+	
+	return 0;
 }
 
 void span_draw_unit_text(const span_unit_t *unit, int line) {
