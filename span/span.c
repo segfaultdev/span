@@ -146,9 +146,10 @@ void span_draw_window(const span_window_t *window, int line) {
 	
 	for (int i = 0; i < window->n; i++) {
 		const span_object_t *object = window->items + i;
+		const int scroll_line = (object->is_fixed ? 0 : window->line);
 		
-		if (line + window->line - j >= 0 && line + window->line - j < object->h) {
-			span_draw_object(object, line + window->line - j);
+		if (line + scroll_line - j >= 0 && line + scroll_line - j < object->h) {
+			span_draw_object(object, line + scroll_line - j);
 			return;
 		}
 		
@@ -167,6 +168,11 @@ int span_offset(const span_window_t *window, int n) {
 	}
 	
 	return j;
+}
+
+int span_midway(const span_window_t *window, int n) {
+	const span_object_t *object = window->items + n;
+	return span_offset(window, n) + (object->h / 2);
 }
 
 uint32_t span_linear(uint32_t u) {

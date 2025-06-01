@@ -70,6 +70,19 @@ int main(void) {
 	
 	span_unit_t icon_units[] = {
 		(span_unit_t) {
+			.type = SPAN_UNIT_TEXT,
+			.color_0 = SPAN_COLOR(3, 0, 3),
+			.color_1 = SPAN_COLOR(15, 7, 15),
+			.w = 240,
+			.align = SPAN_ALIGN_CENTER,
+			.text = "Alarma en 6h 58m",
+			.font = &font_terminus_12x24,
+		},
+	};
+	
+	/*
+	span_unit_t icon_units[] = {
+		(span_unit_t) {
 			.type = SPAN_UNIT_NONE,
 			.color_0 = SPAN_COLOR(3, 0, 3),
 			.w = 4,
@@ -92,6 +105,7 @@ int main(void) {
 			.icon = &icon_battery_3_28x28,
 		},
 	};
+	*/
 	
 	span_unit_t hour_units[] = {
 		(span_unit_t) {
@@ -126,6 +140,14 @@ int main(void) {
 			.align = SPAN_ALIGN_CENTER,
 			.text = "18 de septiembre",
 			.font = &font_terminus_12x24,
+		},
+	};
+	
+	span_unit_t filler_units[] = {
+		(span_unit_t) {
+			.type = SPAN_UNIT_NONE,
+			.color_0 = SPAN_COLOR(0, 0, 0),
+			.w = 240,
 		},
 	};
 	
@@ -333,8 +355,9 @@ int main(void) {
 		(span_object_t) {
 			.units = icon_units,
 			.n = sizeof(icon_units) / sizeof(span_unit_t),
-			.h = 28,
+			.h = 36,
 			.is_hoverable = true,
+			.is_fixed = true,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -344,6 +367,7 @@ int main(void) {
 			.n = sizeof(hour_units) / sizeof(span_unit_t),
 			.h = 104,
 			.is_hoverable = false,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -353,6 +377,7 @@ int main(void) {
 			.n = sizeof(minute_units) / sizeof(span_unit_t),
 			.h = 104,
 			.is_hoverable = false,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -360,8 +385,19 @@ int main(void) {
 		(span_object_t) {
 			.units = date_units,
 			.n = sizeof(date_units) / sizeof(span_unit_t),
-			.h = 44,
+			.h = 36,
 			.is_hoverable = false,
+			.is_fixed = false,
+			.on_enter = NULL,
+			.on_leave = NULL,
+			.on_press = NULL,
+		},
+		(span_object_t) {
+			.units = filler_units,
+			.n = sizeof(filler_units) / sizeof(span_unit_t),
+			.h = (280 - 44) / 2,
+			.is_hoverable = false,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -371,6 +407,7 @@ int main(void) {
 			.n = sizeof(menu_0_units) / sizeof(span_unit_t),
 			.h = 44,
 			.is_hoverable = true,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -380,6 +417,7 @@ int main(void) {
 			.n = sizeof(menu_2_units) / sizeof(span_unit_t),
 			.h = 44,
 			.is_hoverable = true,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -389,6 +427,7 @@ int main(void) {
 			.n = sizeof(menu_4_units) / sizeof(span_unit_t),
 			.h = 44,
 			.is_hoverable = true,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -398,6 +437,7 @@ int main(void) {
 			.n = sizeof(menu_6_units) / sizeof(span_unit_t),
 			.h = 44,
 			.is_hoverable = true,
+			.is_fixed = false,
 			.on_enter = NULL,
 			.on_leave = NULL,
 			.on_press = NULL,
@@ -429,6 +469,30 @@ int main(void) {
 			span_draw_window(&root, i);
 		}
 		
+		SDL_SetRenderDrawColor(sdl2_renderer, 211, 211, 211, 255);
+		
+		for (int i = 0; i < 47; i++) {
+			for (int j = 0; j < 47; j++) {
+				if (i * i + j * j < 47 * 47) {
+					continue;
+				}
+				
+				SDL_RenderDrawPoint(sdl2_renderer, 46 - j, 46 - i);
+				SDL_RenderDrawPoint(sdl2_renderer, 239 - (46 - j), 46 - i);
+			}
+		}
+		
+		for (int i = 0; i < 43; i++) {
+			for (int j = 0; j < 43; j++) {
+				if (i * i + j * j < 43 * 43) {
+					continue;
+				}
+				
+				SDL_RenderDrawPoint(sdl2_renderer, 42 - j, 279 - (42 - i));
+				SDL_RenderDrawPoint(sdl2_renderer, 239 - (42 - j), 279 - (42 - i));
+			}
+		}
+		
 		SDL_RenderPresent(sdl2_renderer);
 		
 		while (SDL_PollEvent(&event)) {
@@ -440,7 +504,9 @@ int main(void) {
 			if (event.type == SDL_KEYDOWN) {
 				if (event.key.keysym.sym == SDLK_z) {
 					span_last(&root);
-					span_lerp(&root.line, root.line, span_offset(&root, root.i), 500, span_poly_3);
+					
+					const int offset = (root.i ? (span_midway(&root, root.i) - 140) : 0);
+					span_lerp(&root.line, root.line, offset, 500, span_poly_3);
 				}
 				
 				if (event.key.keysym.sym == SDLK_x) {
@@ -449,7 +515,9 @@ int main(void) {
 				
 				if (event.key.keysym.sym == SDLK_c) {
 					span_next(&root);
-					span_lerp(&root.line, root.line, span_offset(&root, root.i), 500, span_poly_3);
+					
+					const int offset = (root.i ? (span_midway(&root, root.i) - 140) : 0);
+					span_lerp(&root.line, root.line, offset, 500, span_poly_3);
 				}
 			}
 		}

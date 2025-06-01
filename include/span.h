@@ -78,6 +78,7 @@ struct span_object_t {
 	int h;
 	
 	bool is_hoverable;
+	bool is_fixed;
 	
 	void (*on_enter)(const span_window_t *window, int i);
 	void (*on_leave)(const span_window_t *window, int i);
@@ -111,6 +112,7 @@ void span_draw_object(const span_object_t *object, int line);
 void span_draw_window(const span_window_t *window, int line);
 
 int span_offset(const span_window_t *window, int n);
+int span_midway(const span_window_t *window, int n);
 
 // === ANIMATION ===
 
